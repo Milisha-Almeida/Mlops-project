@@ -148,12 +148,11 @@ MLOps-project/
 ├── .gitignore
 └── README.md
 
+```
+The processed dataset is approximately 107 MB and is excluded from Git using `.gitignore`.
 
-### 13. Limitations
+---
 
-Finally:
-
-```markdown
 ## 13. Limitations
 
 - The final model has a relatively low R² of 0.0525.
