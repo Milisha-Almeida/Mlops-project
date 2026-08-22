@@ -3,89 +3,108 @@ import pandas as pd
 
 
 # ============================================================
-# 1. Load trained model
+# 1. LOAD MODEL
 # ============================================================
 
-MODEL_PATH = "models/linear_regression_pipeline.pkl"
+MODEL_PATH = "models/ridge_regression_model.pkl"
+DATA_PATH = "data/vaccine_coldchain_cleaned.csv"
 
 print("Loading trained model...")
 
-model = joblib.load(MODEL_PATH)
+package = joblib.load(MODEL_PATH)
+
+model = package["model"]
+scaler = package["scaler"]
+feature_columns = package["feature_columns"]
 
 print("Model loaded successfully.")
 
 
 # ============================================================
-# 2. New shipment conditions
+# 2. LOAD REAL DATA
 # ============================================================
 
-new_shipment = pd.DataFrame([
-    {
-        "vaccine_type": "mRNA_frozen",
-        "packaging_type": "cold_box",
-        "route_stage": "transit",
+df = pd.read_csv(DATA_PATH)
 
-        "temp_internal_c": -68.5,
-        "temp_ambient_c": 25.0,
-        "temp_setpoint_c": -70.0,
+target = "potency_remaining_pct_t_plus_H"
 
-        "temp_min_30m": -69.5,
-        "temp_max_30m": -67.5,
-        "temp_std_30m": 0.6,
-        "temp_rate_change": 0.05,
+X = df.drop(columns=[target])
 
-        "thermal_excursion_count": 0,
-
-        "humidity_internal_pct": 50.0,
-        "humidity_ambient_pct": 65.0,
-        "dew_point_c": 18.0,
-        "condensation_risk_score": 0.1,
-
-        "compressor_on_ratio": 0.95,
-        "compressor_current_a": 8.0,
-        "compressor_rpm": 2500,
-
-        "evaporator_temp_c": -72.0,
-        "condenser_temp_c": 35.0,
-        "fan_speed_rpm": 1800,
-        "coolant_pressure_kpa": 250.0,
-        "battery_voltage_v": 24.0,
-
-        "power_mode": "normal",
-        "power_outage_count": 0,
-        "defrost_cycle_flag": 0,
-        "controller_reset_count": 0,
-
-        "time_since_packout_min": 300,
-        "cumulative_transit_time_min": 300,
-
-        "time_above_threshold_min": 0
-    }
-])
+# Remove classification target if present
+if "safe_to_use_flag_t_plus_H" in X.columns:
+    X = X.drop(columns=["safe_to_use_flag_t_plus_H"])
 
 
 # ============================================================
-# 3. Make prediction
+# 3. SELECT ONE REAL RECORD
 # ============================================================
 
-print("\nMaking prediction...")
+sample = X.iloc[[0]].copy()
 
-prediction = model.predict(new_shipment)
+actual_value = df.iloc[0][target]
 
 
 # ============================================================
-# 4. Display result
+# 4. ENCODE CATEGORICAL VARIABLES
 # ============================================================
 
-predicted_potency = prediction[0]
+categorical_columns = sample.select_dtypes(
+    include=["object", "category"]
+).columns.tolist()
+
+sample_encoded = pd.get_dummies(
+    sample,
+    columns=categorical_columns,
+    drop_first=True
+)
+
+
+# ============================================================
+# 5. MATCH TRAINING FEATURES
+# ============================================================
+
+sample_encoded = sample_encoded.reindex(
+    columns=feature_columns,
+    fill_value=0
+)
+
+
+# ============================================================
+# 6. SCALE
+# ============================================================
+
+sample_scaled = scaler.transform(
+    sample_encoded
+)
+
+
+# ============================================================
+# 7. PREDICT
+# ============================================================
+
+prediction = model.predict(
+    sample_scaled
+)[0]
+
+
+# ============================================================
+# 8. DISPLAY
+# ============================================================
 
 print("\n========================================")
 print("PHARMACEUTICAL COLD-CHAIN PREDICTION")
 print("========================================")
 
 print(
-    f"Predicted potency after 360 minutes: "
-    f"{predicted_potency:.2f}%"
+    f"Actual potency:    {actual_value:.2f}%"
+)
+
+print(
+    f"Predicted potency: {prediction:.2f}%"
+)
+
+print(
+    f"Absolute error:    {abs(actual_value - prediction):.2f}%"
 )
 
 print("========================================")

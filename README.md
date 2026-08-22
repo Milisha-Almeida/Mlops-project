@@ -8,9 +8,9 @@
 
 ## 2. Problem Statement
 
-Temperature-sensitive pharmaceutical products such as vaccines can lose potency during transportation due to changes in temperature, transit duration, humidity, and refrigeration conditions.
+Temperature-sensitive pharmaceutical products such as vaccines can lose potency during transportation due to changes in temperature, thermal exposure, transit conditions, and other cold-chain factors.
 
-This project uses cold-chain monitoring data to predict the remaining pharmaceutical potency 360 minutes into the future.
+This project uses pharmaceutical cold-chain monitoring data to predict the remaining vaccine potency **360 minutes into the future**.
 
 ---
 
@@ -20,7 +20,7 @@ To develop a machine learning regression model that predicts:
 
 `potency_remaining_pct_t_plus_H`
 
-using pharmaceutical cold-chain environmental and operational data.
+using pharmaceutical cold-chain environmental, biological, thermal, and logistics features.
 
 ---
 
@@ -28,14 +28,15 @@ using pharmaceutical cold-chain environmental and operational data.
 
 **Dataset:** Vaccine Cold-Chain Cyber–Physical Logistics Dataset (VCC-CPLD)
 
-**Source:** Zenodo  
+**Source:** Zenodo
+
 https://zenodo.org/records/18527963
 
 **DOI:** 10.5281/zenodo.18527963
 
-The dataset contains 445,603 time-indexed records collected at a 1-minute sampling resolution.
+The original dataset contains **445,603 time-indexed records** collected at a **1-minute sampling resolution**.
 
-A processed subset of the dataset was used for this project.
+A refined subset of relevant pharmaceutical cold-chain features was selected for this project.
 
 ---
 
@@ -43,7 +44,7 @@ A processed subset of the dataset was used for this project.
 
 **Target:** `potency_remaining_pct_t_plus_H`
 
-The target represents predicted remaining pharmaceutical potency at a **360-minute forecasting horizon**.
+The target represents the predicted remaining vaccine potency at a **360-minute forecasting horizon**.
 
 This is a **supervised regression problem** because the target is a continuous numerical value.
 
@@ -51,47 +52,54 @@ This is a **supervised regression problem** because the target is a continuous n
 
 ## 6. Selected Features
 
-The model uses 30 predictor variables covering:
+The refined dataset contains features covering:
 
-- Vaccine and packaging information
-- Route stage
-- Internal and ambient temperature
-- Temperature statistics and changes
+- Biological and baseline state
+- Potency proxy and vaccine stability
+- Vaccine vial monitor status
+- Remaining shelf life
+- Thermal exposure and cumulative thermal dose
+- Freeze and thaw-refreeze events
 - Thermal excursions
-- Humidity and condensation
-- Compressor and refrigeration conditions
-- Power and equipment conditions
-- Time since pack-out
+- Internal and ambient temperature
+- Temperature variation and rate of change
+- Door activity and handling conditions
+- Vaccine type and packaging type
+- Route stage
 - Cumulative transit time
-- Time above temperature threshold
+- Time since pack-out
+- Estimated time of arrival
+- Weather risk
 
-The constant feature `time_below_threshold_min` was excluded because all 445,603 observations contained a value of zero.
+The constant feature `time_below_threshold_min` was excluded because all observations contained a value of zero.
 
 ---
 
 ## 7. Methodology
 
-1. Load the processed dataset.
-2. Separate predictors and target.
-3. Remove the constant feature.
-4. Identify numerical and categorical features.
-5. One-hot encode categorical variables.
+1. Load the refined dataset.
+2. Separate predictors and target variable.
+3. Identify numerical and categorical features.
+4. One-hot encode categorical variables.
+5. Standardize features for linear models.
 6. Perform an 80/20 time-based train-test split.
-7. Train regression models.
-8. Evaluate model performance using MAE, RMSE and R².
+7. Train multiple regression models.
+8. Evaluate models using MAE, RMSE, and R².
 9. Select the best-performing model.
-10. Save the trained model pipeline.
-11. Use the saved pipeline for future predictions.
+10. Save the final trained Ridge Regression model.
+11. Use the saved model to make future potency predictions.
 
 ---
 
 ## 8. Models Tested
 
-- Mean Baseline
-- Time-only Linear Regression
+The following regression models were evaluated:
+
+- Linear Regression (OLS)
+- Ridge Regression (L2)
 - Random Forest Regressor
-- Multivariable Linear Regression
 - Gradient Boosting Regressor
+- HistGradientBoosting Regressor
 
 ---
 
@@ -99,33 +107,37 @@ The constant feature `time_below_threshold_min` was excluded because all 445,603
 
 | Model | MAE | RMSE | R² |
 |---|---:|---:|---:|
-| Mean Baseline | 1.7645 | 2.2565 | ~0.0000 |
-| Random Forest | 1.7448 | 2.2396 | 0.0149 |
-| Time-only Linear Regression | 1.6971 | 2.2001 | 0.0493 |
-| **Multivariable Linear Regression** | **1.6964** | **2.1965** | **0.0525** |
-| Gradient Boosting | 1.6976 | 2.1966 | 0.0523 |
+| **Ridge Regression (L2)** | **1.6262** | **1.9806** | **0.1986** |
+| Linear Regression (OLS) | 1.6270 | 1.9813 | 0.1980 |
+| Gradient Boosting | 1.6454 | 2.0046 | 0.1790 |
+| Random Forest | 1.6542 | 2.0160 | 0.1697 |
+| HistGradientBoosting | 1.6721 | 2.0609 | 0.1322 |
 
 ---
 
 ## 10. Final Model
 
-**Multivariable Linear Regression** was selected as the final model because it achieved the best performance among the tested models.
+**Ridge Regression (L2)** was selected as the final model because it achieved the best overall performance among the evaluated models.
 
-The trained pipeline is saved as:
+### Final Performance
 
-`models/linear_regression_pipeline.pkl`
+- **MAE:** 1.6262
+- **RMSE:** 1.9806
+- **R²:** 0.1986
+
+The trained model is saved as:
+
+`models/ridge_regression_model.pkl`
 
 ---
 
 ## 11. Results
 
-Final model performance:
+The final Ridge Regression model achieved an **MAE of 1.6262 percentage points**, meaning that the model's predictions differ from the actual future potency by approximately 1.63 percentage points on average.
 
-- **MAE:** 1.6964
-- **RMSE:** 2.1965
-- **R²:** 0.0525
+The model achieved an **RMSE of 1.9806** and an **R² of 0.1986** on the test set.
 
-The model predicts future potency with an average error of approximately **1.70 percentage points**.
+Feature analysis also showed that `potency_proxy_index`, internal temperature, temperature variation, remaining shelf life, temperature rate of change, ETA, weather risk, and transit-related variables were among the important predictors.
 
 ---
 
@@ -135,27 +147,28 @@ The model predicts future potency with an average error of approximately **1.70 
 MLOps-project/
 │
 ├── data/
-│   └── README.md
+│   ├── README.md
+│   └── vaccine_coldchain_cleaned.csv
 │
 ├── src/
 │   ├── train.py
 │   └── predict.py
 │
 ├── models/
-│   └── linear_regression_pipeline.pkl
+│   └── ridge_regression_model.pkl
 │
 ├── requirements.txt
 ├── .gitignore
 └── README.md
 
 ```
-The processed dataset is approximately 107 MB and is excluded from Git using `.gitignore`.
 
 ---
 
 ## 13. Limitations
 
-- The final model has a relatively low R² of 0.0525.
-- The target values are heavily concentrated near high potency levels.
-- The available features may not capture all factors affecting future potency.
-- The model is a project prototype and should not be used as a standalone pharmaceutical safety or regulatory decision-making system.
+-The final model has an R² of 0.1986, indicating that substantial variation in future potency remains unexplained.
+-The target values are concentrated toward relatively high potency levels.
+-The available features may not capture every factor affecting future pharmaceutical potency.
+-Model performance may vary under different transportation and environmental conditions.
+-The model is a project prototype and should not be used as a standalone pharmaceutical safety or regulatory decision-making system.

@@ -1,179 +1,317 @@
-import pandas as pd
+# ============================================================
+# MODEL TRAINING & BENCHMARKING
+# ============================================================
+import os
 import joblib
+import numpy as np
+import pandas as pd
 
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.ensemble import (
+    GradientBoostingRegressor,
+    HistGradientBoostingRegressor,
+    RandomForestRegressor,
+)
+
+from sklearn.linear_model import LinearRegression, Ridge
+
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score
+)
+
+from sklearn.preprocessing import StandardScaler
 
 
 # ============================================================
-# 1. Configuration
-# ============================================================
-
-DATA_PATH = "data/pharmaceutical_coldchain_preprocessed_dataset.csv"
-MODEL_PATH = "models/linear_regression_pipeline.pkl"
-
-TARGET = "potency_remaining_pct_t_plus_H"
-
-
-# ============================================================
-# 2. Load dataset
+# 1. LOAD DATASET
 # ============================================================
 
 print("Loading dataset...")
 
-df = pd.read_csv(DATA_PATH)
+DATA_PATH = "data/vaccine_coldchain_cleaned.csv"
 
-print("Dataset shape:", df.shape)
+df_model = pd.read_csv(DATA_PATH)
+
+print("Dataset shape:", df_model.shape)
 
 
 # ============================================================
-# 3. Separate features and target
+# 2. TARGET
 # ============================================================
 
-X = df.drop(
-    columns=[
-        TARGET,
-        "time_below_threshold_min"
-    ]
-)
+target = "potency_remaining_pct_t_plus_H"
 
-y = df[TARGET]
+drop_cols = [target]
+
+# Classification target is not used for regression
+if "safe_to_use_flag_t_plus_H" in df_model.columns:
+    drop_cols.append("safe_to_use_flag_t_plus_H")
+
+
+X = df_model.drop(columns=drop_cols)
+
+y = df_model[target]
+
 
 print("\nFeatures:", X.shape)
 print("Target:", y.shape)
 
 
 # ============================================================
-# 4. Identify categorical and numerical columns
+# 3. IDENTIFY CATEGORICAL FEATURES
 # ============================================================
 
-categorical_columns = X.select_dtypes(
-    include=["object"]
-).columns.tolist()
-
-numerical_columns = X.select_dtypes(
-    include=["int64", "float64"]
+cat_cols = X.select_dtypes(
+    include=["object", "category"]
 ).columns.tolist()
 
 print("\nCategorical columns:")
-print(categorical_columns)
-
-print("\nNumber of numerical columns:")
-print(len(numerical_columns))
+print(cat_cols)
 
 
 # ============================================================
-# 5. Time-based train/test split
+# 4. ONE-HOT ENCODING
 # ============================================================
 
-split_index = int(len(df) * 0.80)
+X_encoded = pd.get_dummies(
+    X,
+    columns=cat_cols,
+    drop_first=True
+)
 
-X_train = X.iloc[:split_index]
-X_test = X.iloc[split_index:]
+print("\nEncoded feature shape:", X_encoded.shape)
+
+
+# ============================================================
+# 5. CHRONOLOGICAL 80/20 TRAIN-TEST SPLIT
+# ============================================================
+
+split_index = int(len(X_encoded) * 0.80)
+
+X_train = X_encoded.iloc[:split_index]
+X_test = X_encoded.iloc[split_index:]
 
 y_train = y.iloc[:split_index]
 y_test = y.iloc[split_index:]
 
-print("\nTraining samples:", len(X_train))
-print("Testing samples:", len(X_test))
+
+print("\n========================================")
+print("TRAIN / TEST SPLIT")
+print("========================================")
+
+print("Training samples:", len(X_train))
+print("Testing samples :", len(X_test))
 
 
 # ============================================================
-# 6. Preprocessing
+# 6. STANDARDIZATION FOR LINEAR MODELS
 # ============================================================
 
-preprocessor = ColumnTransformer(
-    transformers=[
-        (
-            "categorical",
-            OneHotEncoder(handle_unknown="ignore"),
-            categorical_columns
+scaler = StandardScaler()
+
+X_train_scaled = scaler.fit_transform(X_train)
+
+X_test_scaled = scaler.transform(X_test)
+
+
+# ============================================================
+# 7. DEFINE MODELS
+# ============================================================
+
+models = {
+
+    "Linear Regression (OLS)": (
+        LinearRegression(),
+        True
+    ),
+
+    "Ridge Regression (L2)": (
+        Ridge(alpha=10.0),
+        True
+    ),
+
+    "Random Forest": (
+        RandomForestRegressor(
+            n_estimators=100,
+            random_state=42,
+            n_jobs=-1
         ),
-        (
-            "numerical",
-            "passthrough",
-            numerical_columns
-        )
-    ]
+        False
+    ),
+
+    "Gradient Boosting": (
+        GradientBoostingRegressor(
+            n_estimators=150,
+            random_state=42
+        ),
+        False
+    ),
+
+    "HistGradientBoosting": (
+        HistGradientBoostingRegressor(
+            max_iter=200,
+            random_state=42
+        ),
+        False
+    )
+}
+
+
+# ============================================================
+# 8. TRAIN AND EVALUATE MODELS
+# ============================================================
+
+results = []
+
+print("\n========================================")
+print("MODEL TRAINING")
+print("========================================")
+
+for name, (model, requires_scaling) in models.items():
+
+    print(f"\nTraining {name}...")
+
+    if requires_scaling:
+
+        X_tr = X_train_scaled
+        X_te = X_test_scaled
+
+    else:
+
+        X_tr = X_train
+        X_te = X_test
+
+    model.fit(
+        X_tr,
+        y_train
+    )
+
+    preds = model.predict(
+        X_te
+    )
+
+    mae = mean_absolute_error(
+        y_test,
+        preds
+    )
+
+    mse = mean_squared_error(
+        y_test,
+        preds
+    )
+
+    rmse = np.sqrt(mse)
+
+    r2 = r2_score(
+        y_test,
+        preds
+    )
+
+    results.append({
+        "Model": name,
+        "MAE": mae,
+        "RMSE": rmse,
+        "R2 Score": r2
+    })
+
+    print("Training completed.")
+
+
+# ============================================================
+# 9. MODEL COMPARISON
+# ============================================================
+
+results_df = pd.DataFrame(
+    results
+).sort_values(
+    by="R2 Score",
+    ascending=False
 )
-
-
-# ============================================================
-# 7. Create Linear Regression model
-# ============================================================
-
-model = LinearRegression()
-
-
-# ============================================================
-# 8. Create complete pipeline
-# ============================================================
-
-pipeline = Pipeline(
-    steps=[
-        ("preprocessor", preprocessor),
-        ("model", model)
-    ]
-)
-
-
-# ============================================================
-# 9. Train model
-# ============================================================
-
-print("\nTraining Linear Regression...")
-
-pipeline.fit(X_train, y_train)
-
-print("Training completed.")
-
-
-# ============================================================
-# 10. Make predictions
-# ============================================================
-
-print("\nMaking predictions...")
-
-y_pred = pipeline.predict(X_test)
-
-
-# ============================================================
-# 11. Evaluate model
-# ============================================================
-
-mae = mean_absolute_error(y_test, y_pred)
-
-mse = mean_squared_error(y_test, y_pred)
-
-rmse = mse ** 0.5
-
-r2 = r2_score(y_test, y_pred)
 
 
 print("\n========================================")
-print("FINAL MODEL PERFORMANCE")
+print("FINAL MODEL COMPARISON")
 print("========================================")
 
-print(f"MAE  : {mae:.4f}")
-print(f"MSE  : {mse:.4f}")
-print(f"RMSE : {rmse:.4f}")
-print(f"R²   : {r2:.4f}")
+print(
+    results_df.to_string(
+        index=False
+    )
+)
 
 
 # ============================================================
-# 12. Save model
+# 10. RANDOM FOREST FEATURE IMPORTANCE
 # ============================================================
+
+rf = models["Random Forest"][0]
+
+importances = pd.DataFrame({
+
+    "Feature": X_train.columns,
+
+    "Importance": rf.feature_importances_
+
+}).sort_values(
+    by="Importance",
+    ascending=False
+)
+
+
+print("\n========================================")
+print("TOP 10 FEATURE IMPORTANCES")
+print("========================================")
+
+print(
+    importances.head(10).to_string(
+        index=False
+    )
+)
+
+
+# ============================================================
+# 11. BEST MODEL
+# ============================================================
+
+best_model = results_df.iloc[0]
+
+print("\n========================================")
+print("BEST MODEL")
+print("========================================")
+
+print("Model:", best_model["Model"])
+print(f"MAE  : {best_model['MAE']:.4f}")
+print(f"RMSE : {best_model['RMSE']:.4f}")
+print(f"R²   : {best_model['R2 Score']:.4f}")
+
+# ============================================================
+# 12. SAVE FINAL RIDGE MODEL
+# ============================================================
+
+# Create models directory if it does not exist
+os.makedirs("models", exist_ok=True)
+
+# Ridge model is the best-performing model
+ridge_model = models["Ridge Regression (L2)"][0]
+
+# Save Ridge model + scaler together
+model_package = {
+    "model": ridge_model,
+    "scaler": scaler,
+    "feature_columns": X_train.columns.tolist()
+}
+
+model_path = "models/ridge_regression_model.pkl"
 
 joblib.dump(
-    pipeline,
-    MODEL_PATH
+    model_package,
+    model_path
 )
 
 print("\n========================================")
-print("MODEL SAVED")
+print("FINAL MODEL SAVED")
 print("========================================")
 
-print(MODEL_PATH)
+print(f"Model: Ridge Regression (L2)")
+print(f"Saved to: {model_path}")

@@ -1,6 +1,3 @@
-# Dataset
-data/*.csv
-
 # Trained models
 models/*.pkl
 
