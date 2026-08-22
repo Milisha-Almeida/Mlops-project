@@ -35,3 +35,5 @@ The processed CSV file is stored locally because of its large size and is exclud
 File:
 
 `pharmaceutical_coldchain_preprocessed_dataset.csv`
+
+https://colab.research.google.com/drive/18iJy-yyVZKJEblgMQTJ58JcaJt5yd7I5?usp=sharing
