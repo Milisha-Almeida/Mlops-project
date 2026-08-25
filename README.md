@@ -172,3 +172,9 @@ MLOps-project/
 -The available features may not capture every factor affecting future pharmaceutical potency.
 -Model performance may vary under different transportation and environmental conditions.
 -The model is a project prototype and should not be used as a standalone pharmaceutical safety or regulatory decision-making system.
+
+## 14. Git Workflow
+
+This project uses Git and GitHub for collaborative development.
+
+The workflow includes feature branches, commits, pushing changes to the remote repository, fetching updates, merging, rebasing, and resetting commits when required.
