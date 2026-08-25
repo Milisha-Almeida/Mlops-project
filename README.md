@@ -178,3 +178,7 @@ MLOps-project/
 This project uses Git and GitHub for collaborative development.
 
 The workflow includes feature branches, commits, pushing changes to the remote repository, fetching updates, merging, rebasing, and resetting commits when required.
+
+## 15. Collaboration
+
+Team members use separate Git branches to develop and test changes before synchronizing them with the main branch.
